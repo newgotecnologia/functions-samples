@@ -1,1 +1,0 @@
-**Moved to https://github.com/firebase/user-data-protection/blob/master/doc/design.md**
