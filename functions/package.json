@@ -1,0 +1,22 @@
+{
+  "name": "gcf-ffmpeg-linear16",
+  "version": "0.1.0",
+  "description": "GCF to convert audio file into LINEAR16 using FFmpeg",
+  "author": "Firebase (https://firebase.google.com/), modifications NewGo Tecnologia (https://github.com/newgotecnologia)",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@google-cloud/storage": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-plugin-promise": "^4.2.1"
+  },
+  "scripts": {
+    "lint": "./node_modules/.bin/eslint --max-warnings=0 ."
+  },
+  "engines": {
+    "node": "10"
+  },
+  "private": true
+}

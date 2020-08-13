@@ -1,5 +1,6 @@
 /**
  * Copyright 2017 Google Inc. All Rights Reserved.
+ * Modifications copyright 2020 NewGo Tecnologia
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +16,12 @@
  */
 'use strict';
 
-const functions = require('firebase-functions');
-const gcs = require('@google-cloud/storage')();
+const { Storage } = require('@google-cloud/storage');
+const gcs = new Storage();
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpeg_static = require('ffmpeg-static');
 
 // Makes an ffmpeg command return a promise.
 function promisifyCommand(command) {
@@ -31,56 +31,61 @@ function promisifyCommand(command) {
 }
 
 /**
- * When an audio is uploaded in the Storage bucket We generate a mono channel audio automatically using
+ * When an audio is uploaded in the Storage bucke, we generate a LINEAR16 automatically using
  * node-fluent-ffmpeg.
  */
-exports.generateMonoAudio = functions.storage.object().onFinalize(async (object) => {
-  const fileBucket = object.bucket; // The Storage bucket that contains the file.
-  const filePath = object.name; // File path in the bucket.
-  const contentType = object.contentType; // File content type.
+exports.generateLinear16 = async (data, context, callback) => {
+  const file = data;
+  const fileBucket = file.bucket; // The Storage bucket that contains the file.
+  const filePath = file.name; // File path in the bucket.
+  const contentType = file.contentType; // File content type.
 
   // Exit if this is triggered on a file that is not an audio.
   if (!contentType.startsWith('audio/')) {
     console.log('This is not an audio.');
-    return null;
+    callback();
+    return;
   }
 
   // Get the file name.
   const fileName = path.basename(filePath);
   // Exit if the audio is already converted.
-  if (fileName.endsWith('_output.flac')) {
+  if (fileName.endsWith('_converted.pcm')) {
     console.log('Already a converted audio.');
-    return null;
+    callback();
+    return;
   }
 
   // Download file from bucket.
   const bucket = gcs.bucket(fileBucket);
   const tempFilePath = path.join(os.tmpdir(), fileName);
-  // We add a '_output.flac' suffix to target audio file name. That's where we'll upload the converted audio.
-  const targetTempFileName = fileName.replace(/\.[^/.]+$/, '') + '_output.flac';
+  // We replace the audio file extension name with a '.raw'. That's where we'll upload the converted audio.
+  const targetTempFileName = fileName.replace(/\.[^/.]+$/, '') + '_converted.pcm';
   const targetTempFilePath = path.join(os.tmpdir(), targetTempFileName);
   const targetStorageFilePath = path.join(path.dirname(filePath), targetTempFileName);
 
-  await bucket.file(filePath).download({destination: tempFilePath});
+  await bucket.file(filePath).download({ destination: tempFilePath });
   console.log('Audio downloaded locally to', tempFilePath);
-  // Convert the audio to mono channel using FFMPEG.
-
-  let command = ffmpeg(tempFilePath)
-      .setFfmpegPath(ffmpeg_static.path)
-      .audioChannels(1)
-      .audioFrequency(16000)
-      .format('flac')
-      .output(targetTempFilePath);
+  
+  // Convert the audio to LINEAR16 using FFMPEG.
+  const command = ffmpeg(tempFilePath)
+    .audioCodec('pcm_s16le')      // PCM signed 16-bit little-endian
+    .format('s16le')              // PCM signed 16-bit little-endian
+    .audioChannels(1)             // By default only the first channel is recognized
+    .audioFrequency(16000)        // Optimal sample rate for Speech-to-Text API
+    .output(targetTempFilePath);
 
   await promisifyCommand(command);
   console.log('Output audio created at', targetTempFilePath);
+
   // Uploading the audio.
-  await bucket.upload(targetTempFilePath, {destination: targetStorageFilePath});
+  await bucket.upload(targetTempFilePath, { destination: targetStorageFilePath });
   console.log('Output audio uploaded to', targetStorageFilePath);
 
   // Once the audio has been uploaded delete the local file to free up disk space.
   fs.unlinkSync(tempFilePath);
   fs.unlinkSync(targetTempFilePath);
+  console.log('Temporary files removed.', targetTempFilePath);
 
-  return console.log('Temporary files removed.', targetTempFilePath);
-});
+  callback();
+};
