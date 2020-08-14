@@ -39,6 +39,8 @@ exports.generateLinear16 = async (data, context, callback) => {
   const fileBucket = file.bucket; // The Storage bucket that contains the file.
   const filePath = file.name; // File path in the bucket.
   const contentType = file.contentType; // File content type.
+  
+  console.log(`Processing file at gs://${fileBucket}/${filePath}`);
 
   // Exit if this is triggered on a file that is not an audio.
   if (!contentType.startsWith('audio/')) {
